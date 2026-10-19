@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="TesTube: a touch-friendly YouTube player with search, saved videos, and recents.">
+  <title>TesTube</title>
+  <style>
+    :root { color-scheme: dark; font-family: Arial, Helvetica, sans-serif; background: #000000; color: #fff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #000000; }
+    button, input { font: inherit; font-size: 17px; min-height: 52px; border: 1px solid #555; border-radius: 10px; }
+    button { padding: 10px 18px; background: #000000; color: #fff; cursor: pointer; touch-action: manipulation; }
+    button:hover { border-color: #fff; }
+    button:active { background: #222; }
+    button:disabled { opacity: .45; cursor: default; }
+    button[aria-pressed="true"], button[aria-expanded="true"] { border-color: #fff; }
+    button.primary { background: #fff; color: #000; border-color: #fff; font-weight: 700; }
+    input { min-width: 0; width: 100%; padding: 12px 16px; background: #000000; color: #fff; }
+    input::placeholder { color: #bdbdbd; }
+    :focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    [hidden] { display: none !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+    .app { height: 100vh; height: 100dvh; min-height: 480px; display: flex; flex-direction: column; }
+    header { position: sticky; top: 0; z-index: 2; flex: none; padding: 14px 18px 0; background: #000000; border-bottom: 1px solid #333; }
+    .topbar { display: flex; align-items: center; gap: 12px; }
+    .brand { font-size: 24px; font-weight: 800; letter-spacing: -.8px; white-space: nowrap; }
+    form { display: flex; flex: 1; gap: 10px; min-width: 0; }
+    form input { flex: 1; }
+    form button, .topbar > button { flex: none; white-space: nowrap; }
+    .presets { display: flex; align-items: center; gap: 10px; overflow-x: auto; padding: 12px 0; scrollbar-width: thin; }
+    .presets button { flex: none; min-height: 48px; white-space: nowrap; }
+    .park { margin-left: auto; padding: 0 8px; font-size: 13px; color: #ccc; white-space: nowrap; letter-spacing: 1px; }
+    .status { margin: 0; padding: 0 0 12px; color: #ccc; font-size: 14px; line-height: 1.4; }
+    .error { color: #ffb4ab !important; }
+    main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); background: #000000; }
+    main.drawer-open { grid-template-columns: minmax(0, 1fr) minmax(330px, 43%); }
+    .player { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #000000; }
+    .screen { flex: 1; min-height: 200px; position: relative; background: #000000; }
+    .screen iframe { position: absolute; inset: 0; border: 0; width: 100%; height: 100%; }
+    .empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+    .empty svg { width: 64px; height: 64px; margin-bottom: 12px; }
+    .empty h1 { margin: 0 0 10px; font-size: 32px; }
+    .empty p { max-width: 520px; margin: 6px 0; line-height: 1.5; color: #ccc; }
+    .now { flex: none; min-height: 74px; padding: 10px 18px; border-top: 1px solid #333; display: flex; align-items: center; gap: 12px; }
+    .track { flex: 1; min-width: 0; }
+    .track strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .track small { display: block; margin-top: 5px; line-height: 1.4; color: #ccc; }
+    .now button { min-height: 48px; flex: none; }
+    .drawer { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid #333; background: #000000; }
+    .drawer-head { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid #333; }
+    .drawer-head h2 { flex: 1; min-width: 0; font-size: 18px; margin: 0; overflow-wrap: anywhere; }
+    .drawer-head button { min-height: 48px; padding: 8px 12px; }
+    .drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; overscroll-behavior: contain; }
+    .drawer-note { color: #ccc; margin: 0 0 14px; line-height: 1.5; overflow-wrap: anywhere; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+    .card { padding: 0; overflow: hidden; text-align: left; width: 100%; }
+    .card img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #000000; }
+    .card-text { display: block; padding: 12px; }
+    .card-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; line-height: 1.35; font-weight: 700; }
+    .card-author { display: block; margin-top: 8px; color: #ccc; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+    .drawer.related .grid { grid-template-columns: 1fr; }
+    .drawer.related .card { display: grid; grid-template-columns: 140px minmax(0, 1fr); align-items: start; }
+    .drawer.related .card-title { -webkit-line-clamp: 2; }
+    .storage-note { padding: 8px 18px; border-top: 1px solid #333; margin: 0; color: #ffb4ab; font-size: 14px; }
+    .player:fullscreen { width: 100%; height: 100%; background: #000000; }
+    @media (max-width: 900px) {
+      .app { min-height: 600px; }
+      header { padding: 12px 12px 0; }
+      .topbar { flex-wrap: wrap; gap: 10px; }
+      .brand { flex: 1; }
+      form { order: 3; flex-basis: 100%; }
+      main.drawer-open { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(280px, 1fr) minmax(240px, 1fr); overflow-y: auto; }
+      .drawer { border-left: 0; border-top: 1px solid #333; }
+      .park { display: none; }
+      .now { padding: 8px 12px; }
+    }
+    @media (max-width: 520px) {
+      .app { min-height: 720px; }
+      main.drawer-open { grid-template-rows: minmax(340px, 1fr) minmax(260px, 1fr); }
+      form { flex-wrap: wrap; }
+      form input { flex-basis: 100%; }
+      form button { flex: 1; }
+      .grid { grid-template-columns: 1fr; }
+      .now { flex-wrap: wrap; }
+      .track { flex-basis: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Static HTML only. No build, backend, local API, proxy, or API key.
+       Tesla controls video restrictions and network routing. Use video in Park.
+       This page cannot bypass vehicle restrictions or guarantee cellular use. -->
+  <div class="app">
+    <header>
+      <div class="topbar">
+        <div class="brand">TesTube</div>
+        <form id="searchForm" role="search">
+          <label for="query" class="sr-only">Search YouTube or paste a video link or ID</label>
+          <input id="query" type="text" placeholder="Search YouTube or paste a link" maxlength="300" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search">
+          <button class="primary" type="submit">Search</button>
+          <button id="playLink" type="button">Play Link</button>
+        </form>
+        <button id="recents" type="button" aria-controls="drawer" aria-expanded="false">Recents</button>
+      </div>
+      <nav class="presets" aria-label="Quick searches">
+        <button type="button" data-query="Telugu hits songs">Telugu Hits</button>
+        <button type="button" data-query="Telugu jukebox full songs">Telugu Jukebox</button>
+        <button type="button" data-query="lofi hip hop radio live">Lofi Beats</button>
+        <button type="button" data-query="NASA live space station Earth">Live Space</button>
+        <button id="saved" type="button" aria-controls="drawer" aria-expanded="false">Saved</button>
+        <button id="upNext" type="button" aria-controls="drawer" aria-expanded="false" disabled>Up next</button>
+        <span class="park">WATCH IN PARK</span>
+      </nav>
+      <p id="status" class="status" role="status" aria-live="polite">Search for videos or paste a YouTube link. Watch video only in Park.</p>
+    </header>
+    <main id="main">
+      <section id="playerSection" class="player" aria-label="YouTube video player">
+        <div id="screen" class="screen">
+          <div id="empty" class="empty">
+            <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="2" y="9" width="60" height="46" rx="13" stroke="white" stroke-width="2"/><path d="M27 22L44 32L27 42V22Z" fill="white"/></svg>
+            <h1>TesTube</h1>
+            <p>Search. Tap. Play.</p>
+            <p>Choose a preset, search for a video, or paste a YouTube link.</p>
+            <p>Video playback is subject to Tesla restrictions. Your vehicle chooses the network connection.</p>
+          </div>
+        </div>
+        <div class="now">
+          <div class="track">
+            <strong id="videoTitle">No video selected</strong>
+            <small id="playback" role="status" aria-live="polite">The player will appear here.</small>
+          </div>
+          <button id="saveVideo" type="button" disabled aria-pressed="false">Save</button>
+          <button id="fullscreen" type="button">Fullscreen</button>
+        </div>
+      </section>
+      <aside id="drawer" class="drawer" aria-labelledby="drawerTitle" hidden>
+        <div class="drawer-head">
+          <h2 id="drawerTitle">Results</h2>
+          <button id="retry" type="button" hidden>Retry</button>
+          <button id="clearRecents" type="button" hidden>Clear</button>
+          <button id="closeDrawer" type="button" aria-label="Close panel">Close</button>
+        </div>
+        <div id="drawerBody" class="drawer-body" aria-busy="false">
+          <p id="drawerNote" class="drawer-note" role="status"></p>
+          <div id="cards" class="grid"></div>
+        </div>
+      </aside>
+    </main>
+    <p id="storageNote" class="storage-note" role="status" hidden>Browser storage is unavailable. Recents and saved videos will last only for this session.</p>
+  </div>
+  <noscript>Enable JavaScript to use TesTube.</noscript>
+  <script>
+    "use strict";
+
+    const $ = id => document.getElementById(id);
+    const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+    const STORAGE_KEY = "testube.library.v1";
+    const MAX_ITEMS = 40;
+    const INVIDIOUS_REGISTRY = "https://api.invidious.io/instances.json?sort_by=health";
+    const PIPED_REGISTRY = "https://raw.githubusercontent.com/TeamPiped/documentation/main/content/docs/public-instances/index.md";
+    // Listed by Piped and verified to return CORS-enabled JSON when added.
+    // Discovery refreshes the directory; public availability can still change.
+    const PREFERRED_PIPED = ["https://pipedapi.ducks.party", "https://api.piped.private.coffee"];
+    const FALLBACK_INVIDIOUS = ["https://invidious.f5.si"];
+    let instances = null;
+    let instancesExpire = 0;
+    let searchController = null;
+    let searchSerial = 0;
+    let lastQuery = "";
+    let drawerMode = "";
+    let currentVideo = null;
+    let iframe = null;
+    let youtubePlayer = null;
+    let playerSerial = 0;
+    let relatedController = null;
+    let relatedSerial = 0;
+    let relatedState = { id: null, status: "idle", videos: [], kind: "related", query: "" };
+    const relatedCache = new Map();
+
+    function cleanText(value, fallback) {
+      return typeof value === "string" && value.trim() ? value.trim().slice(0, 300) : fallback;
+    }
+
+    function extractVideoId(input) {
+      const value = String(input || "").trim();
+      if (VIDEO_ID.test(value)) return value;
+      try {
+        const url = new URL(/^https?:\/\//i.test(value) ? value : "https://" + value);
+        if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return null;
+        const host = url.hostname.toLowerCase();
+        const parts = url.pathname.split("/").filter(Boolean);
+        let id = null;
+        if (host === "youtu.be" || host === "www.youtu.be") {
+          id = parts.length === 1 ? parts[0] : null;
+        } else if (["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"].includes(host)) {
+          if (url.pathname === "/watch") id = url.searchParams.get("v");
+          else if (["embed", "shorts", "live", "v"].includes(parts[0]) && parts.length === 2) id = parts[1];
+        }
+        return id && VIDEO_ID.test(id) ? id : null;
+      } catch (_) { return null; }
+    }
+
+    function safeImage(value, id) {
+      const fallback = "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg";
+      try {
+        const url = new URL(value);
+        return url.protocol === "https:" && !url.username && !url.password ? url.href : fallback;
+      } catch (_) { return fallback; }
+    }
+
+    function normalizeVideo(item) {
+      if (!item || typeof item !== "object" || typeof item.id !== "string" || !VIDEO_ID.test(item.id)) return null;
+      return {
+        id: item.id,
+        title: cleanText(item.title, "YouTube video " + item.id),
+        author: cleanText(item.author, "YouTube"),
+        thumbnail: safeImage(item.thumbnail, item.id)
+      };
+    }
+
+    function cleanList(items) {
+      const seen = new Set();
+      return (Array.isArray(items) ? items : []).map(normalizeVideo).filter(video => {
+        if (!video || seen.has(video.id)) return false;
+        seen.add(video.id);
+        return true;
+      }).slice(0, MAX_ITEMS);
+    }
+
+    function readLibrary() {
+      try {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        return { recents: cleanList(data && data.recents), saved: cleanList(data && data.saved) };
+      } catch (_) {
+        $("storageNote").hidden = false;
+        return { recents: [], saved: [] };
+      }
+    }
+
+    const library = readLibrary();
+
+    function persistLibrary() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(library));
+        $("storageNote").hidden = true;
+      } catch (_) { $("storageNote").hidden = false; }
+    }
+
+    function setStatus(message, error = false) {
+      $("status").textContent = message;
+      $("status").classList.toggle("error", error);
+    }
+
+    function setPlayback(message, error = false) {
+      $("playback").textContent = message;
+      $("playback").classList.toggle("error", error);
+    }
+
+    function cancelSearch() {
+      searchSerial++;
+      if (searchController) searchController.abort();
+      searchController = null;
+      $("drawerBody").setAttribute("aria-busy", "false");
+    }
+
+    function openDrawer(mode, title) {
+      drawerMode = mode;
+      $("drawerTitle").textContent = title;
+      $("drawer").hidden = false;
+      $("main").classList.add("drawer-open");
+      $("recents").setAttribute("aria-expanded", String(mode === "recents"));
+      $("saved").setAttribute("aria-expanded", String(mode === "saved"));
+      $("upNext").setAttribute("aria-expanded", String(mode === "related"));
+      $("drawer").classList.toggle("related", mode === "related");
+      $("retry").hidden = true;
+      $("clearRecents").hidden = mode !== "recents" || !library.recents.length;
+      $("drawerNote").classList.remove("error");
+      $("drawerBody").scrollTop = 0;
+    }
+
+    function closeDrawer() {
+      cancelSearch();
+      drawerMode = "";
+      $("drawer").hidden = true;
+      $("main").classList.remove("drawer-open");
+      $("recents").setAttribute("aria-expanded", "false");
+      $("saved").setAttribute("aria-expanded", "false");
+      $("upNext").setAttribute("aria-expanded", "false");
+    }
+
+    function renderCards(videos) {
+      const fragment = document.createDocumentFragment();
+      videos.forEach(video => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "card";
+        card.setAttribute("aria-label", "Play " + video.title + " by " + video.author);
+        const image = document.createElement("img");
+        image.src = video.thumbnail;
+        image.alt = "";
+        image.width = 480;
+        image.height = 270;
+        image.loading = "lazy";
+        image.decoding = "async";
+        image.addEventListener("error", () => {
+          image.src = "https://i.ytimg.com/vi/" + video.id + "/hqdefault.jpg";
+        }, { once: true });
+        const text = document.createElement("span");
+        text.className = "card-text";
+        const title = document.createElement("span");
+        title.className = "card-title";
+        title.textContent = video.title;
+        const author = document.createElement("span");
+        author.className = "card-author";
+        author.textContent = video.author;
+        text.append(title, author);
+        card.append(image, text);
+        card.addEventListener("click", () => playVideo(video));
+        fragment.append(card);
+      });
+      $("cards").replaceChildren(fragment);
+    }
+
+    // Every request is an absolute, external HTTPS URL. No same-origin /api calls.
+    async function fetchRemote(address, parentSignal, timeout = 7000, asJSON = true) {
+      const url = new URL(address);
+      if (url.protocol !== "https:" || url.origin === location.origin || url.username || url.password) {
+        throw new Error("An external HTTPS search service is required.");
+      }
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      if (parentSignal && parentSignal.aborted) throw new DOMException("Cancelled", "AbortError");
+      if (parentSignal) parentSignal.addEventListener("abort", abort, { once: true });
+      const timer = setTimeout(abort, timeout);
+      try {
+        const response = await fetch(url.href, {
+          mode: "cors", credentials: "omit", cache: "no-store",
+          headers: { Accept: "application/json" }, signal: controller.signal
+        });
+        if (!response.ok) throw new Error("Search service returned HTTP " + response.status + ".");
+        const type = (response.headers.get("content-type") || "").toLowerCase();
+        if (asJSON && !type.includes("json")) throw new Error("Search service returned a web page instead of JSON.");
+        const body = await response.text();
+        if (!body.trim() || body.trim().startsWith("<") || type.includes("text/html")) throw new Error("Search service returned an invalid response.");
+        if (!asJSON) return body;
+        try { return JSON.parse(body); }
+        catch (_) { throw new Error("Search service returned malformed JSON."); }
+      } finally {
+        clearTimeout(timer);
+        if (parentSignal) parentSignal.removeEventListener("abort", abort);
+      }
+    }
+
+    function fetchJSON(address, signal, timeout = 7000) {
+      return fetchRemote(address, signal, timeout, true);
+    }
+
+    function fetchText(address, signal, timeout = 5000) {
+      return fetchRemote(address, signal, timeout, false);
+    }
+
+    function instanceOrigin(value) {
+      try {
+        const url = new URL(value);
+        return url.protocol === "https:" && !url.username && !url.password && url.origin !== location.origin ? url.origin : null;
+      } catch (_) { return null; }
+    }
+
+    function parsePipedDirectory(markdown) {
+      const bases = [];
+      String(markdown).split(/\r?\n/).forEach(line => {
+        const cells = line.split("|").map(cell => cell.trim());
+        // The second column in Piped's directory is the instance API URL.
+        if (cells.length < 3 || !/^https:\/\//i.test(cells[1])) return;
+        const base = instanceOrigin(cells[1]);
+        if (base) bases.push(base);
+      });
+      return [...new Set(bases)];
+    }
+
+    async function discoverServices(signal) {
+      if (instances && Date.now() < instancesExpire) return instances;
+      const results = await Promise.allSettled([
+        fetchJSON(INVIDIOUS_REGISTRY, signal, 5000),
+        fetchText(PIPED_REGISTRY, signal, 5000)
+      ]);
+      if (signal.aborted) throw new DOMException("Cancelled", "AbortError");
+      let invidious = FALLBACK_INVIDIOUS.map(instanceOrigin).filter(Boolean);
+      let piped = PREFERRED_PIPED.slice();
+      if (results[0].status === "fulfilled" && Array.isArray(results[0].value)) {
+        invidious = results[0].value.filter(entry => {
+          const info = Array.isArray(entry) && entry[1];
+          return info && info.type === "https" && info.api === true && info.cors === true && !(info.monitor && info.monitor.down);
+        }).map(entry => instanceOrigin(entry[1].uri)).filter(Boolean);
+      }
+      if (results[1].status === "fulfilled") {
+        const listed = parsePipedDirectory(results[1].value);
+        if (listed.length) piped = listed;
+      }
+      const preferred = PREFERRED_PIPED.filter(base => piped.includes(base));
+      const candidates = [
+        ...preferred.map(base => ({ type: "piped", base })),
+        ...[...new Set(invidious)].map(base => ({ type: "invidious", base })),
+        ...piped.filter(base => !preferred.includes(base)).map(base => ({ type: "piped", base }))
+      ];
+      const seen = new Set();
+      instances = candidates.filter(service => {
+        const key = service.type + ":" + service.base;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).slice(0, 4);
+      instancesExpire = Date.now() + 10 * 60 * 1000;
+      return instances;
+    }
+
+    function parseResults(data, base) {
+      if (!Array.isArray(data)) throw new Error("Search service returned an unexpected JSON format.");
+      const videos = data.filter(item => item && (item.type === "video" || !item.type)).map(item => {
+        const thumbnails = Array.isArray(item.videoThumbnails) ? item.videoThumbnails : [];
+        const thumbnail = thumbnails.find(t => t && t.quality === "medium") || thumbnails.find(t => t && t.url);
+        let image = "";
+        try { if (thumbnail) image = new URL(thumbnail.url, base).href; } catch (_) {}
+        return { id: item.videoId, title: item.title, author: item.author, thumbnail: image };
+      });
+      return cleanList(videos);
+    }
+
+    function parsePipedResults(data) {
+      if (!data || !Array.isArray(data.items)) throw new Error("Search service returned an unexpected JSON format.");
+      const videos = data.items.filter(item => item && (!item.type || item.type === "stream" || item.type === "video")).map(item => {
+        let id = null;
+        try { id = extractVideoId(new URL(item.url, "https://www.youtube.com").href); } catch (_) {}
+        return { id, title: item.title, author: item.uploaderName || item.uploader, thumbnail: item.thumbnail };
+      });
+      return cleanList(videos);
+    }
+
+    async function searchService(service, query, signal) {
+      const url = new URL(service.base + (service.type === "piped" ? "/search" : "/api/v1/search"));
+      url.searchParams.set("q", query);
+      if (service.type === "piped") url.searchParams.set("filter", "videos");
+      else {
+        url.searchParams.set("type", "video");
+        url.searchParams.set("page", "1");
+      }
+      const data = await fetchJSON(url.href, signal);
+      return service.type === "piped" ? parsePipedResults(data) : parseResults(data, service.base);
+    }
+
+    function parseRelatedVideos(data, service, video) {
+      const items = data && (service.type === "piped" ? data.relatedStreams : data.recommendedVideos);
+      if (!Array.isArray(items)) throw new Error("No recommendation data was returned.");
+      const videos = service.type === "piped" ? parsePipedResults({ items }) : parseResults(items, service.base);
+      const thumbnails = Array.isArray(data.videoThumbnails) ? data.videoThumbnails : [];
+      const details = normalizeVideo({
+        id: video.id,
+        title: cleanText(data.title, video.title),
+        author: cleanText(service.type === "piped" ? data.uploader : data.author, video.author),
+        thumbnail: service.type === "piped" ? data.thumbnailUrl || video.thumbnail : (thumbnails[0] && thumbnails[0].url) || video.thumbnail
+      });
+      return { videos: videos.filter(item => item.id !== video.id).slice(0, 20), video: details || video };
+    }
+
+    function similarVideoQuery(video) {
+      const author = video.author !== "YouTube" ? video.author : "";
+      const title = video.title !== "YouTube video " + video.id ? video.title : "";
+      // A short title prefix often supplies a movie, artist, or series name.
+      const prefix = title.match(/^([^:]{2,60}):/);
+      const context = prefix ? prefix[1].trim() : "";
+      return [context, author].filter(Boolean).join(" ").trim() || title;
+    }
+
+    function renderRelatedDrawer() {
+      if (drawerMode !== "related") return;
+      const state = relatedState;
+      $("drawerBody").setAttribute("aria-busy", String(state.status === "loading"));
+      $("retry").hidden = state.status !== "error" && !(state.status === "ready" && !state.videos.length);
+      $("drawerNote").classList.toggle("error", state.status === "error");
+      renderCards(state.status === "ready" ? state.videos : []);
+      if (state.status === "loading") {
+        $("drawerNote").textContent = state.kind === "similar" ? "Finding similar videos…" : "Finding videos related to the current track…";
+      } else if (state.status === "error") {
+        $("drawerNote").textContent = "Suggestions are unavailable right now. Playback can continue. Retry or use Search.";
+      } else if (!state.videos.length) {
+        $("drawerNote").textContent = "No related videos were found for this track. Retry or use Search.";
+      } else {
+        $("drawerNote").textContent = state.kind === "similar"
+          ? "Similar search results for “" + state.query + "”. Tap a video to play."
+          : "Related to “" + currentVideo.title + "”. Tap a video to play. Suggestions are not personalized.";
+      }
+    }
+
+    function acceptRelatedVideos(id, result) {
+      if (!currentVideo || currentVideo.id !== id) return;
+      relatedState = { id, status: "ready", ...result };
+      relatedCache.delete(id);
+      relatedCache.set(id, { expires: Date.now() + 10 * 60 * 1000, result });
+      while (relatedCache.size > 12) relatedCache.delete(relatedCache.keys().next().value);
+      if (result.video) {
+        currentVideo = normalizeVideo(result.video) || currentVideo;
+        $("videoTitle").textContent = currentVideo.title;
+        if (iframe) iframe.title = currentVideo.title;
+        library.recents = library.recents.map(item => item.id === id ? currentVideo : item);
+        library.saved = library.saved.map(item => item.id === id ? currentVideo : item);
+        persistLibrary();
+      }
+      // Updating suggestions never reloads the player or opens a closed panel.
+      renderRelatedDrawer();
+    }
+
+    async function loadRelatedVideos(video, force = false) {
+      if (relatedController) relatedController.abort();
+      relatedController = null;
+      const serial = ++relatedSerial;
+      const cached = relatedCache.get(video.id);
+      if (!force && cached && cached.expires > Date.now()) {
+        acceptRelatedVideos(video.id, cached.result);
+        return;
+      }
+      const controller = new AbortController();
+      relatedController = controller;
+      const active = () => !controller.signal.aborted && serial === relatedSerial && currentVideo && currentVideo.id === video.id;
+      relatedState = { id: video.id, status: "loading", videos: [], kind: "related", query: "" };
+      renderRelatedDrawer();
+      try {
+        if (navigator.onLine === false) throw new Error("Offline");
+        const pool = await discoverServices(controller.signal);
+        if (!active()) return;
+        let details = video;
+        for (const service of pool) {
+          try {
+            const path = service.type === "piped" ? "/streams/" : "/api/v1/videos/";
+            const data = await fetchJSON(service.base + path + video.id, controller.signal, 6000);
+            if (!active()) return;
+            const parsed = parseRelatedVideos(data, service, details);
+            details = parsed.video;
+            if (parsed.videos.length) {
+              acceptRelatedVideos(video.id, { ...parsed, kind: "related", query: "" });
+              return;
+            }
+          } catch (_) { if (!active()) return; }
+        }
+        // Some public instances can search even when YouTube blocks metadata.
+        // Resolve a raw link's title/channel with search before forming a fallback.
+        if (!similarVideoQuery(details)) {
+          for (const service of pool) {
+            try {
+              const matches = await searchService(service, video.id, controller.signal);
+              if (!active()) return;
+              const match = matches.find(item => item.id === video.id);
+              if (match) { details = match; break; }
+            } catch (_) { if (!active()) return; }
+          }
+        }
+        const query = similarVideoQuery(details).slice(0, 300);
+        if (!query) throw new Error("No search context available.");
+        relatedState.kind = "similar";
+        renderRelatedDrawer();
+        let validResponse = false;
+        for (const service of pool) {
+          try {
+            const matches = await searchService(service, query, controller.signal);
+            if (!active()) return;
+            validResponse = true;
+            const videos = matches.filter(item => item.id !== video.id).slice(0, 20);
+            if (videos.length) {
+              acceptRelatedVideos(video.id, { videos, video: details, kind: "similar", query });
+              return;
+            }
+          } catch (_) { if (!active()) return; }
+        }
+        if (validResponse) acceptRelatedVideos(video.id, { videos: [], video: details, kind: "similar", query });
+        else throw new Error("Related services are unavailable.");
+      } catch (_) {
+        if (!active()) return;
+        relatedState = { id: video.id, status: "error", videos: [], kind: "related", query: "" };
+        renderRelatedDrawer();
+      } finally {
+        if (serial === relatedSerial) relatedController = null;
+      }
+    }
+
+    function showRelatedVideos() {
+      if (!currentVideo) return;
+      if (drawerMode === "related") { closeDrawer(); return; }
+      cancelSearch();
+      openDrawer("related", "Up next");
+      renderRelatedDrawer();
+      if (relatedState.id !== currentVideo.id || relatedState.status === "idle") void loadRelatedVideos(currentVideo);
+    }
+
+    async function searchVideos(query) {
+      const term = String(query || "").trim().slice(0, 300);
+      if (!term) { setStatus("Enter search words or a YouTube link.", true); $("query").focus(); return; }
+      const id = extractVideoId(term);
+      if (id) {
+        const known = [...library.recents, ...library.saved].find(video => video.id === id);
+        playVideo(known || { id });
+        return;
+      }
+      if (/^(?:https?:\/\/|(?:www\.|m\.|music\.)?(?:youtube\.com|youtu\.be)\/)/i.test(term)) {
+        setStatus("That link has no valid video ID. Paste a YouTube video link or an eleven-character video ID.", true);
+        return;
+      }
+      cancelSearch();
+      const serial = searchSerial;
+      const controller = new AbortController();
+      searchController = controller;
+      lastQuery = term;
+      $("query").value = term;
+      openDrawer("search", "Search results");
+      renderCards([]);
+      $("drawerBody").setAttribute("aria-busy", "true");
+      $("drawerNote").textContent = "Finding a public search service…";
+      setStatus("Searching for “" + term + "”…");
+      try {
+        if (navigator.onLine === false) throw new Error("No network connection is available.");
+        const pool = await discoverServices(controller.signal);
+        if (!pool.length) throw new Error("No public CORS-enabled search service is currently listed.");
+        let lastError = null;
+        for (let i = 0; i < pool.length; i++) {
+          if (controller.signal.aborted) return;
+          const service = pool[i];
+          const base = service.base;
+          $("drawerNote").textContent = "Searching “" + term + "” · service " + (i + 1) + " of " + pool.length;
+          try {
+            const videos = await searchService(service, term, controller.signal);
+            if (serial !== searchSerial || controller.signal.aborted) return;
+            // Try the last successful service first on the next search.
+            instances = [service, ...pool.filter(candidate => candidate !== service)];
+            renderCards(videos);
+            $("drawerNote").textContent = videos.length ? videos.length + " videos · " + new URL(base).hostname : "No videos found. Try different search words.";
+            setStatus(videos.length ? "Tap a video to play." : "No matching videos found.");
+            return;
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("Public search services are unavailable.");
+      } catch (error) {
+        if (serial !== searchSerial || controller.signal.aborted) return;
+        const detail = error instanceof TypeError ? "A service could not be reached or blocked browser access (CORS)." : error.name === "AbortError" ? "The search service timed out." : error.message;
+        $("drawerNote").textContent = "Search unavailable. " + detail + " Public services may be offline, rate-limited, or blocked. Retry later, or paste a YouTube video link and tap Play Link.";
+        $("drawerNote").classList.add("error");
+        $("retry").hidden = false;
+        instancesExpire = 0;
+        setStatus("Search unavailable. Direct video links can still be tried.", true);
+      } finally {
+        if (serial === searchSerial) {
+          $("drawerBody").setAttribute("aria-busy", "false");
+          searchController = null;
+        }
+      }
+    }
+
+    function updateSaveButton() {
+      const saved = !!currentVideo && library.saved.some(video => video.id === currentVideo.id);
+      $("saveVideo").disabled = !currentVideo;
+      $("saveVideo").textContent = saved ? "Unsave" : "Save";
+      $("saveVideo").setAttribute("aria-pressed", String(saved));
+    }
+
+    function showLibrary(mode) {
+      if (drawerMode === mode) { closeDrawer(); setStatus("Results closed."); return; }
+      cancelSearch();
+      openDrawer(mode, mode === "recents" ? "Recents" : "Saved videos");
+      const videos = library[mode];
+      renderCards(videos);
+      $("drawerNote").textContent = videos.length ? "Tap a video to replay." : mode === "recents" ? "Videos you select will appear here." : "Tap Save below the player to bookmark a video.";
+      setStatus(mode === "recents" ? "Recent videos" : "Saved videos");
+    }
+
+    function attachYouTubeAPI() {
+      if (!iframe || youtubePlayer || !window.YT || typeof window.YT.Player !== "function") return;
+      const serial = playerSerial;
+      try {
+        youtubePlayer = new YT.Player(iframe, {
+          events: {
+            onReady(event) {
+              if (serial !== playerSerial) return;
+              event.target.playVideo();
+            },
+            onAutoplayBlocked() {
+              if (serial === playerSerial) setPlayback("Autoplay was blocked. Tap Play inside the video.");
+            },
+            onStateChange(event) {
+              if (serial !== playerSerial) return;
+              const labels = { 0: "Ended", 1: "Playing", 2: "Paused", 3: "Buffering…", 5: "Ready" };
+              if (labels[event.data]) setPlayback(labels[event.data] + " · " + currentVideo.author);
+            },
+            onError(event) {
+              if (serial !== playerSerial) return;
+              const errors = {
+                2: "Invalid video ID.",
+                5: "The browser could not play this video.",
+                100: "This video is unavailable or private.",
+                101: "The owner does not allow embedded playback.",
+                150: "The owner does not allow embedded playback.",
+                153: "YouTube could not verify this site's identity. Serve it over HTTPS and allow the Referer header."
+              };
+              setPlayback(errors[event.data] || "YouTube playback failed. Try another video.", true);
+            }
+          }
+        });
+      } catch (_) {
+        setPlayback("Use the controls inside the video. Player status is unavailable.");
+      }
+    }
+
+    function playVideo(item) {
+      const video = normalizeVideo(item);
+      if (!video) { setStatus("Invalid eleven-character video ID.", true); return; }
+      closeDrawer();
+      playerSerial++;
+      if (youtubePlayer) {
+        try { youtubePlayer.destroy(); } catch (_) {}
+        youtubePlayer = null;
+      }
+      if (iframe) iframe.remove();
+      currentVideo = video;
+      $("empty").hidden = true;
+      $("videoTitle").textContent = video.title;
+      setPlayback("Loading… If playback does not start, tap Play inside the video.");
+      const url = new URL("https://www.youtube.com/embed/" + video.id);
+      url.searchParams.set("autoplay", "1");
+      url.searchParams.set("enablejsapi", "1");
+      url.searchParams.set("playsinline", "1");
+      url.searchParams.set("controls", "1");
+      url.searchParams.set("rel", "0");
+      if (location.protocol === "https:" || location.protocol === "http:") url.searchParams.set("origin", location.origin);
+      iframe = document.createElement("iframe");
+      iframe.id = "youtubePlayer";
+      iframe.title = video.title;
+      iframe.allow = "autoplay; fullscreen";
+      iframe.allowFullscreen = true;
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
+      iframe.src = url.href;
+      $("screen").append(iframe);
+      // Searching, opening drawers, and saving never recreate this iframe.
+      attachYouTubeAPI();
+      library.recents = [video, ...library.recents.filter(v => v.id !== video.id)].slice(0, MAX_ITEMS);
+      persistLibrary();
+      updateSaveButton();
+      $("upNext").disabled = false;
+      setStatus("Video selected. Playback remains subject to YouTube, browser, and vehicle restrictions.");
+      $("query").blur();
+      openDrawer("related", "Up next");
+      void loadRelatedVideos(video);
+    }
+
+    $("searchForm").addEventListener("submit", event => {
+      event.preventDefault();
+      searchVideos($("query").value);
+    });
+    $("playLink").addEventListener("click", () => {
+      const id = extractVideoId($("query").value);
+      if (!id) { setStatus("Paste a YouTube watch link, youtu.be link, or eleven-character video ID.", true); return; }
+      const known = [...library.recents, ...library.saved].find(video => video.id === id);
+      playVideo(known || { id });
+    });
+    document.querySelectorAll("[data-query]").forEach(button => {
+      button.addEventListener("click", () => searchVideos(button.dataset.query));
+    });
+    $("recents").addEventListener("click", () => showLibrary("recents"));
+    $("saved").addEventListener("click", () => showLibrary("saved"));
+    $("upNext").addEventListener("click", showRelatedVideos);
+    $("closeDrawer").addEventListener("click", () => {
+      closeDrawer();
+      setStatus("Results closed.");
+      $("recents").focus();
+    });
+    $("retry").addEventListener("click", () => {
+      instancesExpire = 0;
+      if (drawerMode === "related" && currentVideo) void loadRelatedVideos(currentVideo, true);
+      else void searchVideos(lastQuery);
+    });
+    $("clearRecents").addEventListener("click", () => {
+      library.recents = [];
+      persistLibrary();
+      drawerMode = "";
+      showLibrary("recents");
+    });
+    $("saveVideo").addEventListener("click", () => {
+      if (!currentVideo) return;
+      const exists = library.saved.some(video => video.id === currentVideo.id);
+      library.saved = exists ? library.saved.filter(video => video.id !== currentVideo.id) : [currentVideo, ...library.saved].slice(0, MAX_ITEMS);
+      persistLibrary();
+      updateSaveButton();
+      if (drawerMode === "saved") { drawerMode = ""; showLibrary("saved"); }
+    });
+    $("fullscreen").addEventListener("click", async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else if ($("playerSection").requestFullscreen) await $("playerSection").requestFullscreen();
+        else setStatus("Page fullscreen is unavailable. Try the YouTube fullscreen control.");
+      } catch (_) { setStatus("Fullscreen is unavailable in this browser or vehicle state.", true); }
+    });
+    document.addEventListener("fullscreenchange", () => {
+      $("fullscreen").textContent = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && drawerMode) {
+        closeDrawer();
+        setStatus("Results closed.");
+        $("recents").focus();
+      }
+    });
+    window.addEventListener("offline", () => setStatus("Network connection lost. Playback may stop when its buffer runs out.", true));
+    window.addEventListener("online", () => setStatus("Network connection restored. Retry search or use the player controls."));
+    window.onYouTubeIframeAPIReady = attachYouTubeAPI;
+    const apiScript = document.createElement("script");
+    apiScript.src = "https://www.youtube.com/iframe_api";
+    apiScript.async = true;
+    apiScript.addEventListener("error", () => {
+      if (currentVideo) setPlayback("Use the controls inside the video. Player status is unavailable.");
+    });
+    document.head.append(apiScript);
+    // No timers reload the player and no visibility handler forces pause/resume.
+  </script>
+</body>
+</html>
